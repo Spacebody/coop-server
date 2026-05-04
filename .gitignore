@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build artifacts
+build/
+dist/
+*.tar.gz
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Coop runtime data (在用户的部署目录,通常不在仓库里;这里防误 commit)
+data/coop.db
+data/coop.db-wal
+data/coop.db-shm
+data/token
+client/token
+logs/
+coop-server.pid
+coop-stress-logs/
+
+# Local configs (用户级)
+.coop/
+*.local.yaml
+
+# 不要 commit 用户实际部署目录到仓库 (示意)
+coop-server/
+coop-worker/

@@ -1,0 +1,45 @@
+# Coop Server 配置示例
+# 把此文件复制为 config.yaml 修改后使用
+
+server:
+  # 监听地址。0.0.0.0 表示所有网络接口
+  host: "0.0.0.0"
+  port: 7777
+  # 传输协议: streamable_http (推荐) 或 sse
+  transport: "streamable_http"
+
+auth:
+  # 是否启用 token 鉴权 (强烈建议开启)
+  enabled: true
+  # token 文件路径。不存在时启动会自动生成
+  # 协调者机器生成后,需要把这个文件放到共享网盘,worker 启动时读取
+  token_file: "/data/token"
+  # 自动生成 token 的长度 (hex 字符数)
+  token_length: 32
+
+database:
+  # SQLite 数据库文件路径
+  path: "/data/coop.db"
+
+heartbeat:
+  # worker 应该每 N 秒上报一次心跳
+  worker_interval_sec: 30
+  # 超过 N 秒未心跳则标记为 OFFLINE
+  timeout_sec: 90
+  # 后台扫描的频率
+  check_interval_sec: 30
+
+discovery:
+  # 是否在局域网通过 mDNS 广播服务地址
+  enabled: true
+  # 服务类型 (RFC 6763), worker 通过此名字发现协调者
+  service_type: "_coop._tcp.local."
+  service_name: "coop-server"
+  # 广播的 IP, 留空让程序自动检测局域网 IP
+  advertise_host: ""
+
+logging:
+  level: "INFO"
+  file: "/data/coop.log"
+  rotate_max_bytes: 10485760  # 10MB
+  rotate_backup_count: 5

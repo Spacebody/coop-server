@@ -1,0 +1,32 @@
+name: Feature Request
+description: 提一个功能建议
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你想解决什么问题?
+      description: 描述当前用 coop-server 时遇到的痛点
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: 建议的解决方案
+      description: 你设想这个功能怎么工作?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 考虑过的替代方案
+      description: 还有什么别的办法?为什么这个更好?
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 其他信息
+      description: 相关 issue, 参考实现, 等等

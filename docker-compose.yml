@@ -1,0 +1,13 @@
+services:
+  coop-server:
+    build: .
+    image: coop-server:0.1.0
+    container_name: coop-server
+    network_mode: host  # 关键: 用宿主机网络才能 mDNS 广播在局域网生效
+    volumes:
+      # 数据持久化:DB、token、日志都在这里
+      - ./data:/data
+      # 配置文件
+      - ./config.yaml:/app/config.yaml:ro
+    restart: unless-stopped
+    # 注意: network_mode=host 时, ports 配置会被忽略, 服务直接用宿主机的 7777 端口

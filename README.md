@@ -65,7 +65,7 @@ Coop Server 可以与 Coordinator 部署在同一台机器,也可以独立部署
 ### 1. 部署 Coop Server(机器 A)
 
 ```bash
-git clone https://github.com/yourusername/coop.git
+git clone https://github.com/Spacebody/coop-server.git
 cd coop
 ./deploy/macos/install.sh
 ```
@@ -133,7 +133,7 @@ Token:  Bearer <token>  (位于 $PREFIX/data/token,通常通过共享网盘分�
 
 ```toml
 [mcp_servers.coop]
-url = "http://192.168.50.252:7777/mcp/"
+url = "http://<coop-server-host>:7777/mcp/"
 headers = { Authorization = "Bearer YOUR_TOKEN_HERE" }
 ```
 

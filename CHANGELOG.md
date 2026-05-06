@@ -4,6 +4,15 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/), 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.2.1] - 2026-05-06
+
+### 鲁棒性改进
+
+- **系统休眠唤醒检测**:笔记本合盖、虚拟机暂停等场景下,server 进程会随宿主机一起 suspend。醒来后 wall clock 已大幅推进,以往会导致所有 worker 被误标为 OFFLINE。现在 heartbeat 监控会检测到这种异常间隔(实际睡眠时长 - 预期间隔 > 30s),续期所有非 OFFLINE worker 的心跳后跳过本轮判定,给 worker 一次正常心跳的窗口。
+- **WAL 周期 checkpoint**:SQLite WAL 模式下,wal 文件长期运行可能持续增长。heartbeat 后台任务现在每约 30 分钟主动执行一次 `PRAGMA wal_checkpoint(TRUNCATE)`,把 wal 文件缩回 0。
+
+[0.2.1]: https://github.com/Spacebody/coop-server/releases/tag/v0.2.1
+
 ## [0.2.0] - 2026-05-06
 
 ### Breaking Changes

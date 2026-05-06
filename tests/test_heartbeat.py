@@ -268,3 +268,90 @@ class TestHeartbeatLifecycle:
         """没启动直接 stop 不出错。"""
         monitor = HeartbeatMonitor(db_path, hb_config, waiters)
         await monitor.stop()  # 不应抛异常
+
+
+class TestRefreshAllHeartbeats:
+    """系统休眠唤醒后续期所有 worker 心跳的逻辑。"""
+
+    async def test_refresh_updates_non_offline_workers(self, db_path, hb_config, waiters):
+        """非 OFFLINE worker 的 last_heartbeat 应被更新到当前时间。"""
+        # 创建两个 worker, 心跳时间都设为很久之前
+        old_time = (datetime.now(timezone.utc) - timedelta(seconds=300)).isoformat()
+        await _make_worker(db_path, "worker-A", last_heartbeat=old_time)
+        await _make_worker(db_path, "worker-B", last_heartbeat=old_time)
+
+        monitor = HeartbeatMonitor(db_path, hb_config, waiters)
+        await monitor._refresh_all_heartbeats()
+
+        # 验证两个 worker 的 last_heartbeat 都被刷新了
+        conn = await open_connection(db_path)
+        try:
+            for wid in ["worker-A", "worker-B"]:
+                worker = await store.get_worker(conn, wid)
+                assert worker is not None
+                # last_heartbeat 应该是最近 (5s 内)
+                last = datetime.fromisoformat(worker.last_heartbeat)
+                age = (datetime.now(timezone.utc) - last).total_seconds()
+                assert age < 5, f"{wid} last_heartbeat 没刷新: age={age}s"
+        finally:
+            await conn.close()
+
+    async def test_refresh_skips_offline_workers(self, db_path, hb_config, waiters):
+        """已经 OFFLINE 的 worker 不应被续期(它真的下线了)。"""
+        old_time = (datetime.now(timezone.utc) - timedelta(seconds=300)).isoformat()
+        await _make_worker(db_path, "worker-A", last_heartbeat=old_time)
+
+        # 手动把 worker 标 OFFLINE
+        conn = await open_connection(db_path)
+        try:
+            await store.update_worker_status(
+                conn, "worker-A", WorkerStatus.OFFLINE, current_task_id=None
+            )
+            await conn.commit()
+        finally:
+            await conn.close()
+
+        monitor = HeartbeatMonitor(db_path, hb_config, waiters)
+        await monitor._refresh_all_heartbeats()
+
+        # OFFLINE worker 的 last_heartbeat 应保持旧值
+        conn = await open_connection(db_path)
+        try:
+            worker = await store.get_worker(conn, "worker-A")
+            assert worker is not None
+            assert worker.last_heartbeat == old_time
+            assert worker.status == WorkerStatus.OFFLINE
+        finally:
+            await conn.close()
+
+    async def test_refresh_no_workers_safe(self, db_path, hb_config, waiters):
+        """空表时 refresh 不抛异常。"""
+        monitor = HeartbeatMonitor(db_path, hb_config, waiters)
+        await monitor._refresh_all_heartbeats()  # 不应抛
+
+
+class TestWalCheckpoint:
+    """WAL checkpoint 不影响正常读写, 不抛异常。"""
+
+    async def test_checkpoint_runs_clean(self, db_path, hb_config, waiters):
+        """空库执行 checkpoint 不出错。"""
+        monitor = HeartbeatMonitor(db_path, hb_config, waiters)
+        await monitor._wal_checkpoint()  # 不应抛
+
+    async def test_checkpoint_after_writes(self, db_path, hb_config, waiters):
+        """有数据后 checkpoint, 数据不丢。"""
+        # 先写一些数据
+        for i in range(5):
+            await _make_worker(db_path, f"worker-{i}")
+
+        monitor = HeartbeatMonitor(db_path, hb_config, waiters)
+        await monitor._wal_checkpoint()
+
+        # 数据还在
+        conn = await open_connection(db_path)
+        try:
+            for i in range(5):
+                worker = await store.get_worker(conn, f"worker-{i}")
+                assert worker is not None
+        finally:
+            await conn.close()

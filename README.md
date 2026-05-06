@@ -34,7 +34,7 @@ Coordinator 和 Worker 是 agent 的运行时角色,与所在机器或所用 LLM
 机器 A (Mac):                          机器 B / C (Mac):
 ┌──────────────────┐                  ┌──────────────────┐
 │ Coop Server      │                  │ Worker           │
-│ (后台进程)       │◄────── MCP ─────►│ (AI agent)       │
+│ (后台进程)        │◄────── MCP ─────►│ (AI agent)       │
 └────────┬─────────┘                  └──────────────────┘
          │ MCP
    ┌─────┴──────┐
@@ -138,7 +138,7 @@ Token:  Bearer <token>  (位于 $PREFIX/data/token,通常通过共享网盘分�
 
 ```toml
 [mcp_servers.coop]
-url = "http://192.168.50.252:7777/mcp/"
+url = "http://<coop-server-host>:7777/mcp/"
 headers = { Authorization = "Bearer YOUR_TOKEN_HERE" }
 ```
 

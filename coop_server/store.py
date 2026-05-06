@@ -356,16 +356,16 @@ async def submit_task(
     conn: aiosqlite.Connection,
     task_id: str,
     worker_id: str,
-    project: str,
-    branch: str,
-    commit_sha: str,
     summary: str,
+    artifact: dict[str, Any] | None = None,
 ) -> Task:
     """worker 提交任务结果。
 
     校验:
     - 任务存在且属于该 worker
     - 当前状态是 IN_PROGRESS (重复提交返回当前状态而不是再次推动状态机)
+
+    artifact 是任意结构的 JSON, server 不做语义解析, 透传给 Coordinator。
     """
     task = await get_task(conn, task_id)
     if task is None:
@@ -384,17 +384,17 @@ async def submit_task(
         )
 
     now = utcnow_iso()
+    artifact_json = json.dumps(artifact, ensure_ascii=False) if artifact is not None else None
     await conn.execute(
         """
         UPDATE tasks SET status = ?,
-            submitted_project = ?, submitted_branch = ?,
-            submitted_commit_sha = ?, submitted_summary = ?,
+            submitted_summary = ?, submitted_artifact = ?,
             submitted_at = ?
         WHERE task_id = ?
         """,
         (
             TaskStatus.SUBMITTED.value,
-            project, branch, commit_sha, summary, now,
+            summary, artifact_json, now,
             task_id,
         ),
     )
@@ -503,6 +503,9 @@ async def abandon_task(
 
 
 def _row_to_task(row: aiosqlite.Row) -> Task:
+    # row.keys() 看 v2 schema 是否生效, 兼容 v1→v2 迁移后保留的旧列
+    artifact_json = row["submitted_artifact"] if "submitted_artifact" in row.keys() else None
+    artifact = json.loads(artifact_json) if artifact_json else None
     return Task(
         task_id=row["task_id"],
         assignee=row["assignee"],
@@ -513,10 +516,8 @@ def _row_to_task(row: aiosqlite.Row) -> Task:
         status=TaskStatus(row["status"]),
         dispatched_from=row["dispatched_from"],
         dispatched_at=row["dispatched_at"],
-        submitted_project=row["submitted_project"],
-        submitted_branch=row["submitted_branch"],
-        submitted_commit_sha=row["submitted_commit_sha"],
         submitted_summary=row["submitted_summary"],
+        submitted_artifact=artifact,
         submitted_at=row["submitted_at"],
         cancel_reason=row["cancel_reason"],
         abandon_reason=row["abandon_reason"],

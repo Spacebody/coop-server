@@ -208,21 +208,18 @@ class SimulatedWorker:
         task_id = task["task_id"]
         await asyncio.sleep(self.simulate_work_seconds)
 
-        # 编造 submit 参数
-        project = "myapp"
-        branch = f"feature/{task_id.lower()}"
-        commit_sha = f"abc{task_id.replace('-', '').lower()}"[:12]
-        log_worker(
-            f"submit_work(task={task_id}, project={project}, "
-            f"branch={branch}, sha={commit_sha})"
-        )
+        # 编造 artifact (模拟 git 工作流的产出)
+        artifact = {
+            "project": "myapp",
+            "branch": f"feature/{task_id.lower()}",
+            "commit_sha": f"abc{task_id.replace('-', '').lower()}"[:12],
+        }
+        log_worker(f"submit_work(task={task_id}, artifact={artifact})")
         r = await self._call(self._work_client, "submit_work", {
             "worker_id": self.worker_id,
             "task_id": task_id,
-            "project": project,
-            "branch": branch,
-            "commit_sha": commit_sha,
             "summary": f"完成 {task_id} 模拟工作",
+            "artifact": artifact,
         })
         if not r.get("ok"):
             log_error(f"submit_work 失败: {r}")
@@ -521,9 +518,8 @@ async def run_smoke_test(
             log_error(f"超时 {timeout_sec}s 未收到 work_submitted 事件")
             return False
         log_test(f"  ✓ 协调者收到提交事件:")
-        log_test(f"    project={ev.get('project')}")
-        log_test(f"    branch={ev.get('branch')}")
-        log_test(f"    commit_sha={ev.get('commit_sha')}")
+        log_test(f"    summary={ev.get('summary')}")
+        log_test(f"    artifact={ev.get('artifact')}")
 
         # 4. 等 cleanup_done (协调者会自动 request_cleanup, worker 会自动 ack)
         log_test("步骤 4: 等清理完成 (协调者自动请求 → worker 自动 ack)")

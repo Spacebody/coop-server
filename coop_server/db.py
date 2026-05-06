@@ -14,9 +14,30 @@ import aiosqlite
 
 logger = logging.getLogger(__name__)
 
-CURRENT_SCHEMA_VERSION = 1
+CURRENT_SCHEMA_VERSION = 2
 
-SCHEMA_V1 = """
+SCHEMA_V2_MIGRATION = """
+-- v2: 把 submitted_project / submitted_branch / submitted_commit_sha 三个固定字段
+-- 合并成一个自由结构的 submitted_artifact JSON 字段, 让 server 完全协议中立
+-- (Coop 0.2.0 起, server 不再假设业务工作流是 git)
+ALTER TABLE tasks ADD COLUMN submitted_artifact TEXT;
+
+-- 把已有数据从三个字段迁移到 artifact JSON
+UPDATE tasks
+SET submitted_artifact = json_object(
+    'project', submitted_project,
+    'branch', submitted_branch,
+    'commit_sha', submitted_commit_sha
+)
+WHERE submitted_at IS NOT NULL;
+
+-- 注意: 三个旧字段保留在表中(SQLite ALTER TABLE DROP COLUMN 在 3.35+ 才有,
+-- 我们不做硬依赖)。代码层只读 submitted_artifact, 旧字段永远不再写入。
+
+INSERT OR IGNORE INTO schema_version (version) VALUES (2);
+"""
+
+SCHEMA_FRESH_V2 = """
 CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER PRIMARY KEY
 );
@@ -40,10 +61,8 @@ CREATE TABLE IF NOT EXISTS tasks (
     status               TEXT NOT NULL,
     dispatched_from      TEXT NOT NULL,
     dispatched_at        TEXT NOT NULL,
-    submitted_project    TEXT,
-    submitted_branch     TEXT,
-    submitted_commit_sha TEXT,
     submitted_summary    TEXT,
+    submitted_artifact   TEXT,                        -- JSON, server 不解析
     submitted_at         TEXT,
     cancel_reason        TEXT,
     abandon_reason       TEXT
@@ -65,7 +84,7 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE INDEX IF NOT EXISTS idx_events_consumed_id ON events(consumed, event_id);
 
 CREATE TABLE IF NOT EXISTS clarifications (
-    task_id      TEXT PRIMARY KEY,  -- 一个任务同时只允许一个未答复的提问
+    task_id      TEXT PRIMARY KEY,
     worker_id    TEXT NOT NULL,
     question     TEXT NOT NULL,
     answer       TEXT,
@@ -73,7 +92,7 @@ CREATE TABLE IF NOT EXISTS clarifications (
     answered_at  TEXT
 );
 
-INSERT OR IGNORE INTO schema_version (version) VALUES (1);
+INSERT OR IGNORE INTO schema_version (version) VALUES (2);
 """
 
 
@@ -100,19 +119,22 @@ async def init_db(db_path: str) -> None:
             current_version = 0
 
         if current_version == 0:
-            logger.info("DB schema 不存在,执行 v1 初始化")
-            await conn.executescript(SCHEMA_V1)
+            logger.info("DB schema 不存在, 执行 v2 全新初始化")
+            await conn.executescript(SCHEMA_FRESH_V2)
             await conn.commit()
-            current_version = 1
+            current_version = 2
 
         if current_version > CURRENT_SCHEMA_VERSION:
             raise RuntimeError(
                 f"DB schema 版本 {current_version} 比代码支持的 "
-                f"{CURRENT_SCHEMA_VERSION} 更新,请升级代码"
+                f"{CURRENT_SCHEMA_VERSION} 更新, 请升级代码"
             )
 
-        # 未来加新版本时,这里写迁移逻辑
-        # if current_version < 2: await migrate_v1_to_v2(conn)
+        if current_version < 2:
+            logger.info("DB schema v1 → v2 迁移中")
+            await conn.executescript(SCHEMA_V2_MIGRATION)
+            await conn.commit()
+            current_version = 2
 
         logger.info(f"DB schema 已就绪 (version={current_version})")
 

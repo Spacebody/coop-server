@@ -4,6 +4,48 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/), 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.2.0] - 2026-05-06
+
+### Breaking Changes
+
+**协议层去业务化**:`submit_work` 的固定字段 `project / branch / commit_sha` 被移除, 替换为单一的可选字段 `artifact: dict`, 用于透传任意结构的工作产出信息。这让 Coop Server 完全协议中立, 不再假设 worker 使用 git 工作流。
+
+**修改前**:
+```python
+submit_work(worker_id, task_id, project, branch, commit_sha, summary)
+```
+
+**修改后**:
+```python
+submit_work(worker_id, task_id, summary, artifact={
+    "project": "myapp",
+    "branch": "feature/login",
+    "commit_sha": "abc1234"
+})
+```
+
+worker 可以根据自己的工作流自由设计 artifact 字段。git 工作流推荐保留上述三个键以保持兼容性, 非 git 场景(数据分析、文档撰写等)则可以放别的字段(报告链接、文件列表、测试结果等)。
+
+### 数据库迁移
+
+DB schema 从 v1 升级到 v2:
+
+- 新增列 `tasks.submitted_artifact` (TEXT, 存 JSON)
+- 旧列 `submitted_project / submitted_branch / submitted_commit_sha` 保留(SQLite ALTER TABLE DROP COLUMN 兼容性原因), 但代码不再写入
+- 已有数据自动迁移:旧三字段合并为 `submitted_artifact = {"project": ..., "branch": ..., "commit_sha": ...}`
+
+迁移在 `init_db` 时自动执行。从 0.1.0 升级到 0.2.0 不需要手动操作, 但需要重启 server。
+
+### 移除 projects.json 依赖
+
+任务信息完全由人类输入决定。Coordinator 不预存工程清单, Worker 不维护 `projects.json` 这类配置文件。派任务时, 人类在对话中给出工程路径(如 `~/code/myapp`), Coordinator 将其原样保留在 task description 中, Worker 收到后自行解析路径并执行任务。
+
+`coop init-worker` 不再生成 `projects.json` 模板。
+
+### 设计原则
+
+这两项变更体现的核心原则:**Coop Server 是纯通信中枢, 不感知业务语义**。所有业务知识都封装在自由文本的 task description 和自由结构的 artifact 中, server 只负责路由和持久化。
+
 ## [0.1.0] - 2026-05-04
 
 首次公开发布。
@@ -11,6 +53,12 @@
 ### 定位
 
 Coop 是协议层 LLM-agnostic 的协作 server, 支持任何兼容 MCP 的 AI 编程 agent 接入 (Claude Code、Codex CLI、Gemini CLI 等)。当前测试主要在 Claude Code 上完成, 其他 agent 需要自行配置 MCP server 连接。
+
+### 设计原则
+
+**任务信息完全由人类输入决定**。Coordinator 不预存工程清单, Worker 不维护 `projects.json` 这类配置文件。
+派任务时, 人类在对话中给出工程路径(如 `~/code/myapp`),Coordinator 将其原样保留在 task description 中, Worker 收到后自行解析路径并执行任务。
+这与"反馈式派单"哲学一致——所有运行时信息都来自任务本身, 不依赖预先声明。
 
 ### 术语规范
 
@@ -81,4 +129,4 @@ Coop 是协议层 LLM-agnostic 的协作 server, 支持任何兼容 MCP 的 AI �
 - e2e (7)
 - 其他模块 (16)
 
-[0.1.0]: https://github.com/yourusername/coop/releases/tag/v0.1.0
+[0.1.0]: https://github.com/Spacebody/coop-server/releases/tag/v0.1.0

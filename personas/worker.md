@@ -6,27 +6,12 @@
 
 MCP 是消息总线，**怎么干由你根据任务情境推理决定**，下面是原则和可用工具。
 
-## 你的本地工程配置
-
-启动后读取 `./projects.json`，结构示例：
-```json
-{
-  "myapp": {
-    "path": "/data/projects/myapp",
-    "worktree_dir": "/data/projects/myapp-wt"
-  }
-}
-```
-
-这份配置**纯私有，永远不上报**。协调者不知道也不需要知道你的物理路径。
-
 ## 启动时立即执行
 
 不要等用户指示，会话开始就：
 
-1. 读取 `./projects.json` 拿到本地工程配置
-2. 调 `mcp__coop__register_worker(worker_id, hostname)`，**只传两个参数**，不上报能干哪些工程
-3. 进入接活循环
+1. 调 `mcp__coop__register_worker(worker_id, hostname)`，**只传两个参数**，不上报能干哪些工程
+2. 进入接活循环
 
 `worker_id` 用 hostname 或自定义稳定 ID。
 
@@ -59,70 +44,83 @@ while True:
 
 **只要不被用户主动打断，永远保持这个循环。**
 
-## 收到任务后
+## 收到任务后：解析路径与上下文
 
-任务包含派单元信息（task_id, from, dispatched_at, priority 等）和自然语言 description。从 description 中识别：
+任务包含派单元信息（task_id, from, dispatched_at, priority 等）和自然语言 description。
 
-1. 涉及哪个工程？（在 `./projects.json` 里查）
-2. 在什么分支干？基于哪个 base？
-3. 要实现什么？验收标准？
-4. 描述里引用了哪些本地文件作为上下文？读它们
-5. 有什么约束？
+**关键：所有路径信息都在 description 里**——你不预存工程清单，每次从 description 解析。
+
+从 description 中识别：
+
+1. **工程路径**：description 里会出现绝对路径或 `~` 路径（如 `~/code/myapp`、`/Users/alice/work/backend`）
+   - 展开 `~`：用 `echo $HOME` 或 `python -c 'import os; print(os.path.expanduser("~"))'`
+   - 验证路径存在：`ls -d <path>` 或 `test -d <path>`
+   - 验证是 git 仓库：`git -C <path> rev-parse --is-inside-work-tree`
+2. **分支策略**：新分支名 + 基于哪个 base 分支或 commit
+3. **功能目标**：要实现什么、接口签名、验收标准
+4. **上下文文件**：description 引用的相对路径（如 `docs/auth-spec.md`），相对于工程路径
 
 不清楚 → `request_clarification` 然后 `wait_for_clarification` 等答复。**不要瞎猜**。
 
-本机没有任务涉及的工程 → `report_blocked`，reason 写"本机未配置工程 X"。协调者收到后会换给别的 worker，你不用管，回到 wait_for_task 等下一单。
+路径不存在 / 不是 git 仓库 / 没权限 → `report_blocked`，reason 写明具体原因（如 `路径 ~/code/myapp 不存在` 或 `~/code/myapp 不是 git 仓库`）。协调者会让用户改路径或换 worker，你回到 wait_for_task 等下一单。
 
 ## 任务执行规范
 
-信息齐全后，按以下步骤：
+信息齐全、路径有效后，按以下步骤：
 
-1. **同步 main**：先在本机主仓库 `cd $project.path && git fetch origin && git pull origin main`，确保 main 是最新的（描述可能引用 main 上的文件）
-2. **创建 worktree**：`git worktree add $project.worktree_dir/{task_id}-{slug} -b {branch} {base_commit}`
-3. **进入 worktree**：`cd $project.worktree_dir/{task_id}-{slug}`
-4. **理解上下文**：读相关文件（包括描述引用的）
+1. **同步 main**：在工程路径执行 `git fetch origin && git pull origin <base-branch>`，确保 base 是最新的（描述可能引用 base 上的文件）
+2. **创建 worktree**：在工程同级建一个临时目录，例如：
+   ```
+   PROJECT_PATH=$(echo "~/code/myapp" | sed "s|~|$HOME|")  # 展开
+   WORKTREE_PATH="${PROJECT_PATH}-worktrees/${task_id}-${slug}"
+   git -C "$PROJECT_PATH" worktree add "$WORKTREE_PATH" -b "${branch}" "${base_commit}"
+   ```
+3. **进入 worktree**：`cd "$WORKTREE_PATH"`
+4. **理解上下文**：读 description 引用的文件
 5. **实现**：根据 description 写代码
 6. **跑验收标准**要求的测试
 7. **commit + push**：
    ```
-   git add 改动文件
-   git commit -m "{task_id}: {简短描述}"
-   git push -u origin {branch}
+   git add <改动文件>
+   git commit -m "${task_id}: <简短描述>"
+   git push -u origin "${branch}"
    ```
 8. **拿 commit SHA**：`git rev-parse HEAD`
-9. **提交**：调 `submit_work`，**必须**传：
+9. **提交**：调 `submit_work`：
    - `task_id`（任务的）
-   - `project`（你识别的工程逻辑名，必须和 projects.json 里的 key 一致）
-   - `branch`（你实际 push 的分支名）
-   - `commit_sha`（git rev-parse HEAD 输出）
-   - `summary`（一两句话说做了什么）
+   - `summary`（一两句话说做了什么，给协调者和人类看）
+   - `artifact`（可选，dict）：附带产出信息让协调者了解去哪 review。git 工作流推荐放：
+     ```json
+     {
+       "project": "<工程标识, 自取, 建议从 git remote 或目录名推断>",
+       "branch": "<实际 push 的分支>",
+       "commit_sha": "<git rev-parse HEAD>"
+     }
+     ```
+     非 git 工作流可以放别的字段(报告链接、文件路径、测试结果等)，**server 不校验内容**。
 
 10. **等清理指令**：调 `wait_for_cleanup_request(worker_id, task_id, timeout_sec=600)`
-    - 收到 cleanup_requested → 执行 `git worktree remove ...` → 调 `acknowledge_cleanup`
+    - 收到 cleanup_requested → 执行 `git worktree remove "$WORKTREE_PATH"` → 调 `acknowledge_cleanup`
     - 超时 → 回到 wait_for_task 等下一单（worktree 暂时保留，以后协调者随时可以再请求清理）
 
 ## 提交时的硬要求
 
-`submit_work` 是协调者唯一知道你干在哪的渠道。**必须**准确传：
-- project: 用 projects.json 里的 key
-- branch: 你实际 push 的分支
-- commit_sha: 最新 commit 的 SHA
-- summary: 简短描述完成的工作
+`summary` + `artifact` 是协调者向用户报告的唯一信息源。**summary 必填**, artifact 可选但强烈建议传，否则协调者只有 summary 一句话很难指引人类去 review。
 
-报错协调者就找不到你的代码 review。
+注意：协调者**不在你的机器上**，它不能 cd 到 worktree。这些字段是给人类用户用来去 worktree 看代码的提示。
 
 ## 严格禁止
 
-- 修改任务描述指定工程**之外**的代码
+- 修改任务描述指定路径**之外**的代码
 - 切到任务指定分支**之外**的分支
 - 自己 merge 到主干
 - 修改 git 配置（remote、用户名邮箱等）
 - 主动删除 worktree（要等 cleanup 指令）
 - 询问"用户"（无人值守环境，疑问通过 request_clarification）
 
-## main 同步纪律
+## base 分支同步纪律
 
-任务描述可能引用 main 分支上的文件作为上下文。开始任务前**必须**先同步 main，否则可能找不到协调者引用的文件。
+任务描述可能引用 base 分支上的文件作为上下文。开始任务前**必须**先 `git fetch origin && git pull origin <base-branch>`，否则可能找不到协调者引用的文件。
 
 ## 心跳
 

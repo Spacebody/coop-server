@@ -151,12 +151,13 @@ class TestTask:
 
         submitted = await store.submit_task(
             db_conn, "T-001", "worker-A",
-            project="myapp", branch="feature/x",
-            commit_sha="abc123", summary="done",
+            summary="done",
+            artifact={"project": "myapp", "branch": "feature/x", "commit_sha": "abc123"},
         )
         assert submitted.status == TaskStatus.SUBMITTED
-        assert submitted.submitted_project == "myapp"
-        assert submitted.submitted_commit_sha == "abc123"
+        assert submitted.submitted_artifact["project"] == "myapp"
+        assert submitted.submitted_artifact["commit_sha"] == "abc123"
+        assert submitted.submitted_summary == "done"
 
         # worker 回到 idle
         worker = await store.get_worker(db_conn, "worker-A")
@@ -168,7 +169,7 @@ class TestTask:
         await store.upsert_worker(db_conn, "worker-A", "host-A")
         with pytest.raises(store.NotFoundError):
             await store.submit_task(
-                db_conn, "T-NONE", "worker-A", "p", "b", "s", ""
+                db_conn, "T-NONE", "worker-A", summary="s",
             )
 
     async def test_submit_other_workers_task(self, db_conn):
@@ -179,7 +180,7 @@ class TestTask:
 
         with pytest.raises(store.InvalidStateError):
             await store.submit_task(
-                db_conn, "T-001", "worker-B", "p", "b", "s", ""
+                db_conn, "T-001", "worker-B", summary="s",
             )
 
     async def test_submit_pending_task_rejected(self, db_conn):
@@ -189,7 +190,7 @@ class TestTask:
 
         with pytest.raises(store.InvalidStateError):
             await store.submit_task(
-                db_conn, "T-001", "worker-A", "p", "b", "s", ""
+                db_conn, "T-001", "worker-A", summary="s",
             )
 
     async def test_submit_idempotent(self, db_conn):
@@ -198,21 +199,24 @@ class TestTask:
         await store.create_task(db_conn, "T-001", "worker-A", "x")
         await store.claim_pending_task(db_conn, "worker-A")
         first = await store.submit_task(
-            db_conn, "T-001", "worker-A", "p", "b", "abc", "s"
+            db_conn, "T-001", "worker-A",
+            summary="s", artifact={"commit_sha": "abc"},
         )
         # 再调一次应该不抛
         second = await store.submit_task(
-            db_conn, "T-001", "worker-A", "p2", "b2", "def", "s2"
+            db_conn, "T-001", "worker-A",
+            summary="s2", artifact={"commit_sha": "def"},
         )
         # 第二次的内容不应覆盖第一次 (幂等保护)
-        assert second.submitted_commit_sha == first.submitted_commit_sha == "abc"
+        assert second.submitted_artifact == first.submitted_artifact
+        assert first.submitted_artifact["commit_sha"] == "abc"
 
     async def test_request_and_acknowledge_cleanup(self, db_conn):
         await store.upsert_worker(db_conn, "worker-A", "host-A")
         await store.create_task(db_conn, "T-001", "worker-A", "x")
         await store.claim_pending_task(db_conn, "worker-A")
         await store.submit_task(
-            db_conn, "T-001", "worker-A", "p", "b", "s", ""
+            db_conn, "T-001", "worker-A", summary="s",
         )
 
         t = await store.request_task_cleanup(db_conn, "T-001")
@@ -247,7 +251,7 @@ class TestTask:
         await store.upsert_worker(db_conn, "worker-A", "host-A")
         await store.create_task(db_conn, "T-001", "worker-A", "x")
         await store.claim_pending_task(db_conn, "worker-A")
-        await store.submit_task(db_conn, "T-001", "worker-A", "p", "b", "s", "")
+        await store.submit_task(db_conn, "T-001", "worker-A", summary="s")
         await store.request_task_cleanup(db_conn, "T-001")
         await store.acknowledge_task_cleanup(db_conn, "T-001", "worker-A")
 

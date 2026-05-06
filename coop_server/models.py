@@ -90,10 +90,8 @@ class Task:
     dispatched_from: str  # 派单方,通常是 'coordinator'
     dispatched_at: str
     # 提交后回填的字段
-    submitted_project: str | None = None
-    submitted_branch: str | None = None
-    submitted_commit_sha: str | None = None
     submitted_summary: str | None = None
+    submitted_artifact: dict[str, Any] | None = None  # 自由结构, server 不解析
     submitted_at: str | None = None
     # 取消/失败原因
     cancel_reason: str | None = None
@@ -113,10 +111,8 @@ class Task:
         }
         if self.submitted_at:
             d["submission"] = {
-                "project": self.submitted_project,
-                "branch": self.submitted_branch,
-                "commit_sha": self.submitted_commit_sha,
                 "summary": self.submitted_summary,
+                "artifact": self.submitted_artifact,
                 "submitted_at": self.submitted_at,
             }
         if self.cancel_reason:

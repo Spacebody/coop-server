@@ -109,7 +109,9 @@ class TestE2EHappyPath:
 
         # 6. worker 提交
         r = await wt.submit_work(
-            "worker-A", "T-001", "myapp", "feature/x", "abc123", "完成"
+            "worker-A", "T-001",
+            summary="完成",
+            artifact={"project": "myapp", "branch": "feature/x", "commit_sha": "abc123"},
         )
         assert r["ok"]
         assert r["task"]["status"] == "submitted"
@@ -117,9 +119,9 @@ class TestE2EHappyPath:
         # 7. 协调者拉事件 (会有多个,我们只验证关键的)
         evt = await _drain_event_until(ct, "work_submitted")
         assert evt["task_id"] == "T-001"
-        assert evt["project"] == "myapp"
-        assert evt["branch"] == "feature/x"
-        assert evt["commit_sha"] == "abc123"
+        assert evt["artifact"]["project"] == "myapp"
+        assert evt["artifact"]["branch"] == "feature/x"
+        assert evt["artifact"]["commit_sha"] == "abc123"
 
         # 8. 协调者请求清理
         r = await ct.request_cleanup("T-001")
@@ -224,7 +226,9 @@ class TestE2EMultiWorker:
             r = await wt.wait_for_task(worker_id, timeout_sec=2)
             assert r["task"]["task_id"] == task_id
             await wt.submit_work(
-                worker_id, task_id, "p", "b", "sha-" + worker_id, "ok"
+                worker_id, task_id,
+                summary="ok",
+                artifact={"commit_sha": "sha-" + worker_id},
             )
 
         await asyncio.gather(

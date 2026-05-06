@@ -175,28 +175,31 @@ class WorkerTools:
         self,
         worker_id: str,
         task_id: str,
-        project: str,
-        branch: str,
-        commit_sha: str,
         summary: str,
+        artifact: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """worker 提交任务结果。"""
+        """worker 提交任务结果。
+
+        artifact 是任意结构的 JSON, 用于把工作产出 (如 git branch/commit、
+        文件路径、报告链接等) 透传给 Coordinator。server 不解析 artifact 内容。
+        """
         for name, val in [
             ("worker_id", worker_id),
             ("task_id", task_id),
-            ("project", project),
-            ("branch", branch),
-            ("commit_sha", commit_sha),
+            ("summary", summary),
         ]:
             if not val or not isinstance(val, str):
                 return {"ok": False, "error": f"{name} 必填"}
+
+        if artifact is not None and not isinstance(artifact, dict):
+            return {"ok": False, "error": "artifact 必须是 JSON 对象 (dict)"}
 
         conn = await open_connection(self._db_path)
         try:
             try:
                 task = await store.submit_task(
                     conn, task_id, worker_id,
-                    project, branch, commit_sha, summary or "",
+                    summary, artifact,
                 )
             except store.NotFoundError:
                 return {"ok": False, "error": f"任务 {task_id} 不存在"}
@@ -209,10 +212,8 @@ class WorkerTools:
                 payload={
                     "task_id": task_id,
                     "worker_id": worker_id,
-                    "project": project,
-                    "branch": branch,
-                    "commit_sha": commit_sha,
                     "summary": summary,
+                    "artifact": artifact,
                 },
                 task_id=task_id,
                 worker_id=worker_id,

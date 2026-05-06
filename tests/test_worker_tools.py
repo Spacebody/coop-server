@@ -162,11 +162,13 @@ class TestSubmitWork:
             await conn.close()
 
         r = await wt.submit_work(
-            "worker-A", "T-001", "myapp", "feature/x", "abc123", "done"
+            "worker-A", "T-001",
+            summary="done",
+            artifact={"project": "myapp", "branch": "feature/x", "commit_sha": "abc123"},
         )
         assert r["ok"] is True
         assert r["task"]["status"] == "submitted"
-        assert r["task"]["submission"]["project"] == "myapp"
+        assert r["task"]["submission"]["artifact"]["project"] == "myapp"
 
         # 协调者被通知
         ev = await waiters.coord_events.wait(0.5)
@@ -176,13 +178,22 @@ class TestSubmitWork:
         _, _, wt = setup
         await wt.register_worker("worker-A", "host-A")
         r = await wt.submit_work(
-            "worker-A", "T-NONE", "p", "b", "s", ""
+            "worker-A", "T-NONE", summary="s",
         )
         assert r["ok"] is False
 
     async def test_submit_missing_args(self, setup):
         _, _, wt = setup
-        r = await wt.submit_work("", "T-001", "p", "b", "s", "")
+        # worker_id 空
+        r = await wt.submit_work("", "T-001", summary="s")
+        assert r["ok"] is False
+        # summary 空
+        r = await wt.submit_work("worker-A", "T-001", summary="")
+        assert r["ok"] is False
+        # artifact 不是 dict
+        r = await wt.submit_work(
+            "worker-A", "T-001", summary="s", artifact="not-a-dict"  # type: ignore
+        )
         assert r["ok"] is False
 
 
@@ -311,9 +322,7 @@ class TestCleanup:
         try:
             await store.create_task(conn, "T-001", "worker-A", "x")
             await store.claim_pending_task(conn, "worker-A")
-            await store.submit_task(
-                conn, "T-001", "worker-A", "p", "b", "s", ""
-            )
+            await store.submit_task(conn, "T-001", "worker-A", summary="s")
             await conn.commit()
         finally:
             await conn.close()
@@ -344,9 +353,7 @@ class TestCleanup:
         try:
             await store.create_task(conn, "T-001", "worker-A", "x")
             await store.claim_pending_task(conn, "worker-A")
-            await store.submit_task(
-                conn, "T-001", "worker-A", "p", "b", "s", ""
-            )
+            await store.submit_task(conn, "T-001", "worker-A", summary="s")
             await store.request_task_cleanup(conn, "T-001")
             await store.acknowledge_task_cleanup(conn, "T-001", "worker-A")
             await conn.commit()

@@ -227,7 +227,7 @@ class TestRequestCleanup:
         try:
             await store.claim_pending_task(conn, "worker-A")
             await store.submit_task(
-                conn, "T-001", "worker-A", "p", "b", "s", ""
+                conn, "T-001", "worker-A", summary="s",
             )
             await conn.commit()
         finally:

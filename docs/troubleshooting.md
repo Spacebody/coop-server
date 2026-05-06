@@ -53,7 +53,7 @@ CLAUDE.md 是项目说明，Claude Code 启动时不会自动"执行"它，需�
 
 修复：在 worker Claude 终端里直接说：
 ```
-按 CLAUDE.md 执行启动动作: 读 projects.json, 调 register_worker, 进入 wait_for_task 循环
+按 CLAUDE.md 执行启动动作: 调 register_worker, 进入 wait_for_task 循环
 ```
 
 或更直接：

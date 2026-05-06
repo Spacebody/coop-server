@@ -49,18 +49,26 @@ worker 启动时声明上线。
 
 ### submit_work
 
-任务做完,提交结果。
+任务做完, 提交结果。
 
 **参数**:
 - `worker_id`: str
 - `task_id`: str
-- `project`: str — 工程逻辑名(协调者也认识的)
-- `branch`: str — git 分支名
-- `commit_sha`: str — 提交 hash
-- `summary`: str — 简要说明完成的工作内容
-- `extra`: dict (可选) — 附加信息(测试结果、审查要点等)
+- `summary`: str — 简要说明完成的工作内容(给 Coordinator 和人类看的)
+- `artifact`: dict (可选) — 自由结构的 JSON, 用于附带工作产出信息(如 git branch/commit_sha、文件路径、报告链接、测试结果等)。**server 不解析 artifact 内容**, 原样透传到 `work_submitted` 事件。Worker 可根据自己的工作流自由设计字段。
 
-**返回**: `{ok: true}` 或 `{ok: false, error: "..."}`
+典型 artifact 示例(git 工作流):
+
+```json
+{
+  "project": "myapp",
+  "branch": "feature/login",
+  "commit_sha": "abc1234",
+  "files_changed": 5
+}
+```
+
+**返回**: `{ok: true, task: {...}}` 或 `{ok: false, error: "..."}`
 
 ### report_blocked
 

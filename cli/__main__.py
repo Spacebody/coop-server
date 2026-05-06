@@ -640,12 +640,12 @@ def cmd_stress_test(args: argparse.Namespace) -> int:
 
 
 def cmd_init_coordinator(args: argparse.Namespace) -> int:
-    """初始化协调者工作目录:写 projects.json、CLAUDE.md、.mcp.json"""
+    """初始化 Coordinator 工作目录: 写 CLAUDE.md 和 .mcp.json"""
     return _init_workspace(args, role="coordinator")
 
 
 def cmd_init_worker(args: argparse.Namespace) -> int:
-    """初始化 worker 工作目录。"""
+    """初始化 Worker 工作目录: 写 CLAUDE.md 和 .mcp.json"""
     return _init_workspace(args, role="worker")
 
 
@@ -663,29 +663,12 @@ def _init_workspace(args: argparse.Namespace, role: str) -> int:
     persona_dst = out_dir / "CLAUDE.md"
     if persona_src.exists():
         if persona_dst.exists():
-            print(f"已存在 {persona_dst},不覆盖")
+            print(f"已存在 {persona_dst}, 不覆盖")
         else:
             shutil.copy2(persona_src, persona_dst)
             print(f"已写入: {persona_dst}")
     else:
         print(f"警告: 找不到 persona 模板 {persona_src}")
-
-    # 3. 写 projects.json 模板 (worker 才需要)
-    if role == "worker":
-        projects_dst = out_dir / "projects.json"
-        if not projects_dst.exists():
-            template = {
-                "_comment": "把你机器上的工程逻辑名 → 本地路径映射写在这里",
-                "myapp": {
-                    "path": "/path/to/myapp",
-                    "worktree_dir": "/path/to/myapp-worktrees",
-                },
-            }
-            projects_dst.write_text(
-                json.dumps(template, indent=2, ensure_ascii=False),
-                encoding="utf-8",
-            )
-            print(f"已写入: {projects_dst} (请编辑成你机器上的实际路径)")
 
     print()
     print(f"{role} 工作目录初始化完成: {out_dir}")

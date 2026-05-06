@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "coop-server"
-version = "0.1.0"
+version = "0.2.0"
 description = "MCP server for Claude Code multi-agent collaboration over LAN"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11"
 authors = [
-    { name = "Coop Server Contributors" },
+    { name = "Spacebody" },
 ]
 keywords = ["mcp", "claude-code", "ai-collaboration", "anthropic"]
 classifiers = [
@@ -36,11 +36,11 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/coop-server"
-Documentation = "https://github.com/yourusername/coop-server/tree/main/docs"
-Repository = "https://github.com/yourusername/coop-server"
-Issues = "https://github.com/yourusername/coop-server/issues"
-Changelog = "https://github.com/yourusername/coop-server/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/Spacebody/coop-server"
+Documentation = "https://github.com/Spacebody/coop-server/tree/main/docs"
+Repository = "https://github.com/Spacebody/coop-server"
+Issues = "https://github.com/Spacebody/coop-server/issues"
+Changelog = "https://github.com/Spacebody/coop-server/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [

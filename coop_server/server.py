@@ -154,18 +154,20 @@ class CoopServer:
             return await wt.wait_for_task(worker_id, timeout_sec)
 
         @mcp.tool(
-            description="worker 提交完成的任务。必须传 project/branch/commit_sha 让协调者能找到代码 review。"
+            description=(
+                "worker 提交完成的任务。summary 是给 Coordinator 和人类看的简短描述。"
+                "artifact 是可选的自由结构 JSON, 用于附带产出信息 "
+                "(如 git branch/commit_sha、文件路径、报告链接等), server 不解析其内容。"
+            )
         )
         async def submit_work(
             worker_id: str,
             task_id: str,
-            project: str,
-            branch: str,
-            commit_sha: str,
-            summary: str = "",
+            summary: str,
+            artifact: dict[str, Any] | None = None,
         ) -> dict[str, Any]:
             return await wt.submit_work(
-                worker_id, task_id, project, branch, commit_sha, summary
+                worker_id, task_id, summary, artifact
             )
 
         @mcp.tool(description="worker 阶段性进度汇报。")

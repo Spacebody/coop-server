@@ -66,7 +66,7 @@ Coop Server 可以与 Coordinator 部署在同一台机器,也可以独立部署
 
 ```bash
 git clone https://github.com/Spacebody/coop-server.git
-cd coop
+cd coop-server
 ./deploy/macos/install.sh
 ```
 
@@ -90,7 +90,7 @@ coop smoke-test      # 端到端通信测试
 ```bash
 cd ~/work
 tar -xzf coop.tar.gz
-cd coop
+cd coop-server
 ./deploy/macos/install-worker.sh
 # 交互式询问 token 路径(从机器 A 共享盘获取)与 Coop Server 地址
 ```
@@ -107,10 +107,15 @@ claude
 # 机器 B:Worker
 cd ~ && mkdir worker-work && cd worker-work
 coop init-worker --dir .
-# 编辑 projects.json,填写本机工程路径
 claude
 # 在 Claude Code 中输入"按 CLAUDE.md 启动"
 ```
+
+派任务时,在 Coordinator 的对话里**直接给出工程路径**,例如:
+
+> "派给 worker-B:在 `~/code/myapp` 加登录功能,基于 main 分支创建 feature/login 分支"
+
+Coordinator 会把你的输入(包括路径)转成任务描述派给 worker,worker 解析路径后开始执行。**无需预配置工程清单**——所有路径信息都来自你的输入。
 
 详细步骤参见 [`docs/operations.md`](docs/operations.md)。
 
